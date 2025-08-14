@@ -1,0 +1,23 @@
+services:
+  postgres:
+    container_name: pg-cont
+    image: postgres
+    environment:
+      POSTGRES_USER: dhean
+      POSTGRES_PASSWORD: pass
+      PGDATA: /var/lib/postgresql/data
+      POSTGRES_DB: dhean-db
+    volumes:
+      - postgres:/data/postgres
+    ports:
+      - 5432:5432
+    networks:
+      - personal
+    restart: unless-stopped
+
+networks:
+  personal:
+    driver: bridge
+volumes:
+  postgres:
+    driver: local

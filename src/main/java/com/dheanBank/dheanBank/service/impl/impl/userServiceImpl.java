@@ -1,9 +1,11 @@
 package com.dheanBank.dheanBank.service.impl.impl;
 
 import com.dheanBank.dheanBank.dto.*;
+import com.dheanBank.dheanBank.entity.Transaction;
 import com.dheanBank.dheanBank.entity.User;
 import com.dheanBank.dheanBank.repository.UserRepository;
 import com.dheanBank.dheanBank.service.impl.EmailService;
+import com.dheanBank.dheanBank.service.impl.TransactionService;
 import com.dheanBank.dheanBank.service.impl.UserService;
 import com.dheanBank.dheanBank.utils.AccountUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +21,9 @@ public class userServiceImpl implements UserService {
 
     @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private TransactionService transactionService;
 
     @Override
     public BankResponse createAccount(UserRequest userRequest) {
@@ -116,6 +121,12 @@ public class userServiceImpl implements UserService {
         User userToCredit = userRepository.findByAccountNumber(request.getAccountNumber());
         userToCredit.setAccountBalance(userToCredit.getAccountBalance().add(request.getAmount()));
         userRepository.save(userToCredit);
+        TransactionDto transaction = TransactionDto.builder()
+                .accountNumber(userToCredit.getAccountNumber())
+                .transactionType("CREDIT")
+                .amount(request.getAmount())
+                .build();
+        transactionService.saveTransaction(transaction);
 
         return BankResponse.builder()
                 .responseCode(AccountUtils.ACCOUNT_CREDITED_SUCCESS)
@@ -125,6 +136,48 @@ public class userServiceImpl implements UserService {
                         .accountBalance(userToCredit.getAccountBalance())
                         .accountNumber(request.getAccountNumber())
                         .build())
+                .build();
+    }
+
+    @Override
+    public BankResponse transfer(TransferRequest request) {
+        //get the account to debit, check if the amount debited is not more than the current account balanace
+        //get the account to credit, credit the account
+        boolean isDestinationAccountExist = userRepository.existsByAccountNumber(request.getDestinationAccountNumber());
+
+        if (!isDestinationAccountExist){
+            return BankResponse.builder()
+                    .responseCode(AccountUtils.ACCOUNT_NOT_EXIST_CODE)
+                    .responseMessage(AccountUtils.ACCOUNT_NOT_EXIST_MESSAGE)
+                    .accountInfo(null)
+                    .build();
+        }
+
+        User sourceAccountUser = userRepository.findByAccountNumber(request.getSourceAccountNumber());
+        if(request.getAmount().compareTo(sourceAccountUser.getAccountBalance()) > 0 ){
+            return BankResponse.builder()
+                    .responseCode(AccountUtils.INSUFFICIENT_BALANCE_CODE)
+                    .responseMessage(AccountUtils.INSUFFICIENT_BALANCE_MESSAGE)
+                    .build();
+        }
+        sourceAccountUser.setAccountBalance(sourceAccountUser.getAccountBalance().subtract(request.getAmount()));
+        String sourceUserName = sourceAccountUser.getFirstName() + " " + sourceAccountUser.getLastName() + " " + sourceAccountUser.getOtherName();
+        userRepository.save(sourceAccountUser);
+        EmailDetails debitAlert =EmailDetails.builder().subject("DEBIT ALERT").recipient(sourceAccountUser.getEmail()).messageBody("The sum of " + request.getAmount() + "has been deducted from your account, your current balance is " + sourceAccountUser.getAccountNumber()).build();
+        emailService.sendEmailAlert(debitAlert);
+
+
+        User destinationAccountUser = userRepository.findByAccountNumber(request.getDestinationAccountNumber());
+        destinationAccountUser.setAccountBalance(destinationAccountUser.getAccountBalance().add(request.getAmount()));
+        String recipientName = destinationAccountUser.getFirstName() + " " + destinationAccountUser.getLastName() + " " + destinationAccountUser.getOtherName();
+        userRepository.save(destinationAccountUser);
+        EmailDetails creditAlert =EmailDetails.builder().subject("CREDIT ALERT").recipient(destinationAccountUser.getEmail()).messageBody(" The sum of " + request.getAmount() + " has been sent to your account from " + sourceUserName + "your current balance is " + sourceAccountUser.getAccountBalance()).build();
+        emailService.sendEmailAlert(creditAlert);
+
+        return BankResponse.builder()
+                .responseCode(AccountUtils.TRANSFER_SUCCESSFUL_CODE)
+                .responseMessage(AccountUtils.TRANSFER_SUCCESSFUL_MESSAGE)
+                .accountInfo(null)
                 .build();
     }
 
@@ -154,6 +207,13 @@ public class userServiceImpl implements UserService {
         else {
             userToDebit.setAccountBalance(userToDebit.getAccountBalance().subtract(request.getAmount()));
             userRepository.save(userToDebit);
+
+            TransactionDto transaction = TransactionDto.builder()
+                    .accountNumber(userToDebit.getAccountNumber())
+                    .transactionType("CREDIT")
+                    .amount(request.getAmount())
+                    .build();
+            transactionService.saveTransaction(transaction);
             return BankResponse.builder()
                     .responseCode(AccountUtils.ACCOUNT_DEBITED_SUCCESS)
                     .responseMessage(AccountUtils.ACCOUNT_DEBITED_MESSAGE)
@@ -166,5 +226,4 @@ public class userServiceImpl implements UserService {
         }
 
     }
-
 }

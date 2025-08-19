@@ -1,9 +1,6 @@
 package com.dheanBank.dheanBank.service.impl;
 
-import com.dheanBank.dheanBank.dto.BankResponse;
-import com.dheanBank.dheanBank.dto.CreditDebitRequest;
-import com.dheanBank.dheanBank.dto.EnquiryRequest;
-import com.dheanBank.dheanBank.dto.UserRequest;
+import com.dheanBank.dheanBank.dto.*;
 
 public interface UserService {
     BankResponse createAccount(UserRequest userRequest);
@@ -13,4 +10,6 @@ public interface UserService {
     BankResponse balanceEnquiry(EnquiryRequest request);
 
     BankResponse creditAccount(CreditDebitRequest request);
+
+    BankResponse transfer(TransferRequest request);
 }
